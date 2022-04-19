@@ -159,7 +159,7 @@ def embedding_density(
             embed_x = adata.obsm[f'X_{basis}'][:, components[0]]
             embed_y = adata.obsm[f'X_{basis}'][:, components[1]]
 
-            dens_embed = _calc_density(embed_x, embed_y, weights)
+            dens_embed = _calc_density(embed_x, embed_y, weights)#weights variable added-----------------------------------------------------------------------------
             density_values[cat_mask] = dens_embed
 
         adata.obs[density_covariate] = density_values
@@ -168,7 +168,7 @@ def embedding_density(
         embed_x = adata.obsm[f'X_{basis}'][:, components[0]]
         embed_y = adata.obsm[f'X_{basis}'][:, components[1]]
 
-        adata.obs[density_covariate] = _calc_density(embed_x, embed_y, weights)
+        adata.obs[density_covariate] = _calc_density(embed_x, embed_y, weights)#weights variable added----------------------------------------------------------------
 
     # Reduce diffmap components for labeling
     # Note: plot_scatter takes care of correcting diffmap components
