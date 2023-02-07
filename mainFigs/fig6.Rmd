@@ -1,0 +1,532 @@
+---
+title: "Explore Schwartzentruber credible sets"
+output:
+  html_document:
+    theme: readable
+    df_print: paged
+    code_folding: hide
+    toc: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+options(stringsAsFactors = F)
+seed <- 87532163
+
+library(knitr)
+library(ggplot2)
+library(RColorBrewer)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(glue)
+
+# source("~/scripts/R_rainclouds.R")
+
+knitr::opts_knit$set(root.dir = "/home/dricardo/work/2022_morabito_reprocess")
+knitr::opts_chunk$set(fig.width = 4, fig.height = 4, fig.show = "hold")
+
+options(dplyr.summarise.inform = FALSE)  # Disable "`summarise()` has grouped output by 'foo'" message
+
+theme_set(theme_bw(base_size = 12) + theme(axis.text = element_text(colour = "black")))
+```
+
+```{r}
+gwas_file <- file.path(
+  "/home/dricardo/data/public/gwas",
+  "2021_schwartzentruber_ad_gwas/table_s8_fine-mapping.tsv"
+)
+s8 <- read.table(gwas_file, header = T, sep = "\t")
+```
+
+```{r}
+snp_class <- s8 %>% 
+  group_by(locus_name) %>% 
+  mutate(n_snps_total = length(rsids)) %>%
+  mutate(ppa = case_when(
+    locus_name %in% "SORL1" ~ finemap_prob2,  # override this one only
+    T ~ finemap_prob_nc)
+  ) %>% 
+  mutate(max_ppa = max(ppa)) %>%
+  mutate(is_lead = finemap_prob1 == max(finemap_prob1)) %>%
+  ungroup() %>% 
+  filter(ppa > 0.01) %>% 
+  mutate(class = case_when(is_lead ~ "Lead SNP",
+                           ppa > 0.3 ~ "PPA > 0.3",
+                           ppa > 0.1 ~ "PPA > 0.1",
+                           T ~ "PPA > 0.01")) %>% 
+  mutate(class = factor(class, levels = c("Lead SNP", "PPA > 0.3", "PPA > 0.1", "PPA > 0.01"))) %>% 
+  select(locus_name, snp, ppa, class)
+```
+
+```{r, fig.width=8, fig.height=3}
+s8 %>% 
+  ggplot(aes(finemap_prob_nc, group = locus_name, color = locus_name)) +
+  stat_ecdf(alpha = .5) +
+  coord_cartesian(xlim = c(0,.5)) +
+  guides(color = "none")
+```
+
+```{r}
+unique(s8$locus_name) %>% sort()
+```
+
+```{r, fig.width=2.8, fig.height=3}
+unique(s8$locus_name) %>% 
+  sort() %>% 
+  # {.[1:2]} %>% 
+  lapply(function(i) {
+    tmp <- s8 %>% 
+      filter(locus_name == i)
+    tmp %>% 
+      ggplot(aes(x = finemap_prob1, y = finemap_prob2)) +
+      geom_point() +
+      geom_abline(lty = "dashed") +
+      labs(title = paste0(i, " n=", unique(tmp$locus_nSnps)))
+  })
+```
+
+
+```{r}
+plot_locus <- function(lname) {
+  p <- s8 %>% 
+    filter(locus_name %in% lname) %>% 
+    ggplot(aes(x = pos_hg38, finemap_prob1)) +
+    geom_point() +
+    ggtitle(lname) 
+  plot(p) 
+  
+  p <- s8 %>% 
+    filter(locus_name %in% lname) %>% 
+    ggplot(aes(x = pos_hg38, finemap_prob2)) +
+    geom_point() +
+    ggtitle(lname)
+  plot(p) 
+  
+  p <- s8 %>% 
+    filter(locus_name %in% lname) %>% 
+    ggplot(aes(x = pos_hg38, finemap_prob3)) +
+    geom_point() +
+    ggtitle(lname)
+  plot(p) 
+}
+
+plot_locus("TREM2")
+plot_locus("SPI1")
+plot_locus("MS4A4A")
+
+plot_locus("APP-ADAMTS1")
+plot_locus("SORL1")
+plot_locus("CR1")
+plot_locus("HLA")
+plot_locus("PILRA")
+```
+
+```{r}
+logans_genes <- list(
+  c("CR1", "CD55", "YOD1"),
+  c("FCER1G", "B4GALT3"),
+  c("TMEM163"),
+  c("NCK2"),
+  c("BIN1"),
+  c("INPP5D"),
+  c("HS3ST1"),
+  c("TREM2"),
+  c("HLA-DRB1", "PSMB8", "GPSM3", "HLA-DPA1", "HLA-DQA1", "HLA-DRA", "HLA-DRB5", "PSMB9"),
+  c("CD2AP"),
+  c("AGFG2", "PILRA", "EPHB4", "C7orf43", "GAL3ST4", "ZKSCAN1"),
+  c("IKZF1"),
+  c("EPHA1", "ZYX", "FAM131B"),
+  c("PTK2B"),
+  c("CLU"),
+  c("TSPAN14"),
+  c("USP6NL", "ECHDC3"),
+  c("CCDC6"),
+  c("PSMC3", "ACP2", "C1QTNF4", "CELF1", "MTCH2", "NDUFS3", "NUP160", "SPI1"),
+  c("SORL1"),
+  c("PICALM", "EED"),
+  c("MS4A6A", "MS4A4A"),
+  c("RIN3", "SLC24A4"),
+  c("FERMT2", "STYX"),
+  c("SPPL2A"),
+  c("APH1B"),
+  c("LIPC", "ADAM10"),
+  c("KAT8", "PRSS36"),
+  c("PLCG2"),
+  c("IQCK"),
+  c("MAF", "WWOX"),
+  c("TSPOAP1-AS1"),
+  c("AC087500.1", "SCIMP"),
+  c("DCAF7", "PSMC5"),
+  c("CD33"),
+  c("APOE"),
+  c("ABCA7", "CNN2", "WDR18"),
+  c("CASS4"),
+  c("AP001439.1", "APP", "ADAMTS1")
+)
+
+logans_genes <- 1:length(logans_genes) %>% 
+  lapply(function(i) {data.frame(gene = logans_genes[[i]], locus = i)}) %>% 
+  bind_rows()
+
+fcs <- read.csv("data/from_logan/mergedPriority_ADgenes_merged_22.03.08.csv", header = T) %>% 
+  rename(gene = Row.names) %>% 
+  gather("celltype", "l2fc", -gene)
+avg_exps <- read.csv("data/from_logan/mergedPriority_avgExprByCellType_22.03.08.csv", header = T) %>% 
+  tibble::rownames_to_column("gene") %>% 
+  gather("celltype", "avg_exp", -gene) %>% 
+  mutate(celltype = recode(celltype, 
+                           astro = "Astrocytes",
+                           microglia = "Microglia",
+                           n_ex = "N_Ex",
+                           n_inh = "N_Inh",
+                           oligo = "Oligodendrocytes",
+                           opc = "OPCs"))
+```
+
+```{r}
+unique(fcs$celltype)
+unique(avg_exps$celltype)
+```
+
+```{r, fig.width=16, fig.height=4}
+d <- fcs %>% 
+  full_join(avg_exps, by = c("gene", "celltype")) %>% 
+  inner_join(logans_genes, by = "gene") %>% 
+  arrange(gene)
+
+gene_ord <- unique(d$gene)
+
+d %>% 
+  mutate(gene = factor(gene, levels = logans_genes$gene)) %>% 
+  ggplot(aes(x = gene, y = celltype, fill = l2fc, size = avg_exp)) +
+  geom_point(shape = 22) +
+  scale_fill_distiller(palette = "Blues") +
+  scale_size(range = c(2, 8), breaks = c(0.1, 2.5, 5, 7.5, 10)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1),
+        panel.grid = element_blank(),
+        legend.position = "bottom")
+```
+
+
+
+```{r}
+# Get CICERO results
+indir <- "work/gwas_overlaps_for_logan/cicero/output/schwartzentruber_2021_cs"
+celltypes <- list.files(indir, pattern = ".txt") %>% 
+  grep("genes.txt", ., invert = T, value = T) %>% 
+  gsub(".txt", "", .)
+
+read_cicero <- function(i) {
+  infile <- file.path(indir, glue("{i}.txt"))
+  read.table(infile, header = T, sep = "\t") %>% 
+    mutate(celltype = i) %>% 
+    mutate(celltype = recode(celltype, 
+                             ASC = "Astrocytes",
+                             MG = "Microglia",
+                             EX = "N_Ex",
+                             INH = "N_Inh",
+                             ODC = "Oligodendrocytes",
+                             OPC = "OPCs"))
+}
+
+cicero_res <- celltypes %>% 
+  lapply(read_cicero) %>% 
+  bind_rows() %>% 
+  select(celltype, p1_tss, p2_tss, p1_ad_snp, p2_ad_snp, coaccess) %>%
+  mutate(tss1_is_snp = !is.na(p1_tss) & !is.na(p1_ad_snp),
+         tss2_is_snp = !is.na(p2_tss) & !is.na(p2_ad_snp))
+```
+
+```{r}
+cicero_genes <- cicero_res %>% 
+  # We want to be inclusive here and select all possible relevant genes
+  mutate(coaccess_gene = case_when(!is.na(p1_ad_snp) & !is.na(p2_tss) ~ p2_tss, 
+                                   !is.na(p2_ad_snp) & !is.na(p1_tss) ~ p1_tss, 
+                                   !is.na(p1_ad_snp) & !is.na(p2_ad_snp) ~ paste(p1_tss, p2_tss, collapse = ","),
+                                   T ~ NA_character_)) %>% 
+  mutate(tss_gene = case_when(!is.na(p1_ad_snp) & !is.na(p1_tss) ~ p1_tss, 
+                              !is.na(p2_ad_snp) & !is.na(p2_tss) ~ p2_tss, 
+                              !is.na(p1_ad_snp) & !is.na(p2_ad_snp) ~ paste(p1_tss, p2_tss, collapse = ","),
+                              T ~ NA_character_)) %>% 
+  select(celltype, coaccess_gene, tss_gene) %>% 
+  distinct() %>% 
+  gather("type", "gene", -celltype) %>% 
+  filter(!is.na(gene)) 
+```
+
+```{r, dev="cairo_pdf"}
+gene_frequencies <- cicero_genes %>% 
+  select(celltype, gene) %>% 
+  distinct() %>% 
+  count(gene, name = "celltype_freq")
+
+
+celltype_freqs <- cicero_genes %>% 
+  select(celltype, gene) %>% 
+  distinct() %>%
+  full_join(gene_frequencies, by = "gene") %>% 
+  count(celltype, celltype_freq) %>% 
+  mutate(frac = n / nrow(gene_frequencies)) %>% 
+  group_by(celltype) %>% 
+  mutate(cumsum = cumsum(frac)) %>% 
+  ungroup()
+
+celltype_ord <- celltype_freqs %>% 
+  group_by(celltype) %>% 
+  summarise(n = sum(n)) %>% 
+  arrange(desc(n)) %>% 
+  pull(celltype)
+
+map_table <- data.frame(
+  old = c("Microglia", "N_Ex", "Astrocytes", "Oligodendrocytes", "N_Inh", "PER.END", "OPCs"),
+  new = c("Microglia", "Exc. neurons", "Astrocytes", "Oligos", "Inh. neurons", "Endoth.", "OPC"),
+  fisher = c("Micro", "N_Ex", "Astro", "Oligo", "N_Inh", NA, "OPCs")
+) %>% 
+  arrange(desc(old))
+
+celltype_freqs %>% 
+  mutate(celltype = factor(
+    celltype, levels = celltype_ord, 
+    labels = map_table$new[match(celltype_ord, map_table$old)]
+    )
+  ) %>% 
+  mutate(celltype_freq = factor(celltype_freq, levels = 7:1)) %>% 
+  ggplot(aes(x = celltype, y = frac, fill = celltype_freq)) +
+  geom_col(color = "black") +
+  scale_fill_brewer(palette = "RdGy", direction = -1) +
+  labs(x = "Cell type", 
+       y = "Fraction of genes linked to AD variants",
+       fill = "Cell types\nobserved",
+       subtitle = glue("n = {nrow(gene_frequencies)} genes")) +
+  guides(fill = guide_legend(reverse = T)) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank())
+```
+
+```{r}
+# Source data for NatComm
+celltype_freqs %>% 
+  mutate(celltype = factor(
+    celltype, levels = celltype_ord, 
+    labels = map_table$new[match(celltype_ord, map_table$old)]
+    )
+  ) %>% 
+  select(-cumsum) %>% 
+  write.table(
+    "~/tmp/source_data_logan/celltype_freqs.tsv", sep = "\t", row.names = F, quote = F
+  )
+```
+
+```{r}
+snps_of_interest <- cicero_res %>% 
+  filter(p1_tss %in% logans_genes$gene | p2_tss %in% logans_genes$gene) %>% 
+  filter(celltype != "PER.END") %>% 
+  mutate(
+    gene = case_when(
+      tss1_is_snp ~ p1_tss,
+      tss2_is_snp ~ p2_tss,
+      !is.na(p1_ad_snp) & is.na(p2_ad_snp) ~ p2_tss,
+      !is.na(p2_ad_snp) & is.na(p1_ad_snp) ~ p1_tss,
+      T ~ "Error"),
+    snp_interest = case_when(
+      tss1_is_snp ~ p1_ad_snp,
+      tss2_is_snp ~ p2_ad_snp,
+      !is.na(p1_ad_snp) & is.na(p2_ad_snp) ~ p1_ad_snp,
+      !is.na(p2_ad_snp) & is.na(p1_ad_snp) ~ p2_ad_snp,
+      T ~ "Error")
+    ) %>% 
+  mutate(tss_variant = tss1_is_snp | tss2_is_snp) %>% 
+  select(celltype, gene, snp_interest, tss_variant, coaccess) %>% 
+  {.$coaccess[.$tss_variant] <- NA; .} %>% 
+  distinct() %>% 
+  separate(snp_interest, c("locus_name", "snp"), "_") %>% 
+  left_join(snp_class, by = c("locus_name", "snp"))
+```
+
+
+```{r, fig.width=16, fig.height=3.5, dev="cairo_pdf"}
+d2 <- d %>% 
+  full_join(snps_of_interest, by = c("gene", "celltype")) %>% 
+  filter(gene %in% logans_genes$gene) %>% 
+  mutate(class = as.character(class)) %>% 
+  mutate(celltype = factor(
+    celltype, levels = rev(celltype_ord), 
+    labels = map_table$new[match(rev(celltype_ord), map_table$old)]
+    )
+  )
+
+# Gymnastics needed to maintain gene order - previously, I had one object just
+# for the SNP classes. When I called geom_tile for separate datasets they, lose
+# the factor order and end up sorted alphabetically
+d2$class[is.na(d2$class)] <- "None"
+d2 <- d2 %>% 
+  mutate(class = factor(
+    class, 
+    levels = c("Lead SNP", "PPA > 0.3", "PPA > 0.1", "PPA > 0.01", "None"),
+    ordered = T)
+  ) %>% 
+  group_by(gene, celltype) %>% 
+  filter(class == min(class, na.rm = T)) %>% 
+  ungroup() %>% 
+  mutate(gene = factor(gene, levels = logans_genes$gene))
+
+d2_tss <- d2 %>% 
+  filter(tss_variant) %>% 
+  mutate(gene = factor(gene, levels = levels(d2$gene)))
+
+cols <- brewer.pal(3, "Reds") %>% rev()
+cols <- c(cols, "white")
+
+# We want to keep the non-significant genes in gray
+d2_nas <- d2 %>% 
+  filter(is.na(l2fc))
+
+d2 %>% 
+  ggplot(aes(x = gene, y = celltype)) +
+  geom_tile(aes(fill = class)) +
+  geom_point(aes(color = l2fc, size = avg_exp), shape = 15) +
+  geom_point(aes(size = avg_exp), color = "gray", shape = 15, data = d2_nas) +
+  geom_tile(color = "black", fill = NA, size = 0.7, data = d2_tss) +
+  scale_color_distiller(palette = "Purples", direction = 1, limits = c(0,2.5), breaks = seq(0,4,1),
+                        na.value = "darkblue") +
+  scale_fill_manual(values = cols) +
+  scale_size(range = c(1, 5), breaks = c(0.01, 0.1, 2.5, 5, 7.5, 10)) +
+  labs(x = "Gene", y = "Cell type", color = expression("log"[2]*"FC"),
+       size = "Avg. exp.", fill = "Co-access. or\nTSS overlap") +
+  theme(axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1),
+        panel.grid = element_blank(),
+        legend.position = "bottom")
+```
+
+```{r}
+d2 %>% 
+  write.table(
+    "~/tmp/source_data_logan/exp_and_coaccess.tsv", sep = "\t", row.names = F, quote = F
+  )
+```
+
+
+```{r, fig.width=16, fig.height=1.5, dev="cairo_pdf"}
+logans_genes$gene[which(!logans_genes$gene %in% d2$gene)]
+
+logans_genes %>% 
+  mutate(gene = factor(gene, levels = logans_genes$gene)) %>% 
+  filter(gene %in% d2$gene) %>% 
+  mutate(color = factor(locus %% 2)) %>% 
+  ggplot(aes(x = gene, y = "a", fill = color)) +
+  geom_tile() +
+  guides(fill = "none") +
+  scale_fill_manual(values = c("gray90", "black")) +
+  theme(axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_blank(),
+        legend.position = "bottom")
+```
+
+## Replication in Morabito
+```{r}
+# Rstudio is being fussy with this directory for some reason...
+rep_fisher_res <- readRDS(
+  "~/work/2021_trem2_adad_snRNAseq/data/side_analyses/2022_logans_paper/fisher_tables_scores.rds"
+)
+
+rep_fisher_res <- names(rep_fisher_res) %>% 
+  lapply(function(i) {
+    data.frame(celltype = i, 
+               or = unname(rep_fisher_res[[i]]$estimate),
+               pval = unname(rep_fisher_res[[i]]$p.value))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(or = round(or, 2)) %>% 
+  mutate(pval_2digits = scientific(pval, digits = 3)) 
+  
+
+celltype_ord_fisher <- celltype_ord[celltype_ord != "PER.END"] %>% 
+  rev()
+
+rep_fisher_table <- readRDS(
+  "~/work/2021_trem2_adad_snRNAseq/data/side_analyses/2022_logans_paper/fisher_tables.rds"
+)
+# x axis = Swarup
+# y axis = Washu
+# True = was DE
+rep_fisher_table <- rep_fisher_table %>% 
+  as.data.frame() %>% 
+  rename(de_washu = Var1, de_swarup = Var2, celltype = Var3, n = Freq) %>% 
+  # fix boolean represented as character
+  mutate(de_washu = de_washu == "TRUE",
+         de_swarup = de_swarup == "TRUE",
+         celltype = as.character(celltype)) %>% 
+  mutate(celltype = factor(
+    celltype, levels = map_table$fisher[match(celltype_ord_fisher, map_table$old)],
+    labels = map_table$new[match(celltype_ord_fisher, map_table$old)]
+    )
+  ) %>%
+  mutate(type = case_when(
+    de_washu & de_swarup ~ "DE both",
+    !de_washu & !de_swarup ~ "Not DE both",
+    de_washu & !de_swarup ~ "DE WashU",
+    !de_washu & de_swarup ~ "DE Swarup",
+    T ~ "error"
+  )) %>% 
+  mutate(type = factor(
+    type, levels = c("DE both", "Not DE both", "DE WashU", "DE Swarup", "error") %>% rev())
+  ) %>% 
+  group_by(celltype) %>% 
+  mutate(frac = n / sum(n)) %>% 
+  ungroup()
+
+celltype_ord_fisher2 <- rep_fisher_table %>% 
+  filter(type %in% c("DE both", "Not DE both")) %>% 
+  group_by(celltype) %>% 
+  summarise(frac = sum(frac)) %>% 
+  arrange(desc(frac)) %>% 
+  pull(celltype)
+  
+```
+
+```{r, fig.width=3.5, fig.height=3.5, dev="cairo_pdf"}
+cols <- brewer.pal(4, "Paired") 
+
+rep_fisher_table %>% 
+  mutate(celltype = factor(celltype, levels = celltype_ord_fisher2)) %>% 
+  ggplot(aes(x = celltype, y = frac, fill = type)) +
+  geom_col() +
+  scale_fill_manual(values = cols) +
+  guides(fill = guide_legend(reverse = T)) +
+  labs(x = "Cell type", y = "Fraction of prioritized genes",
+       fill = "Replication") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank())
+```
+
+```{r, fig.height=2, fig.width=3.5, dev="cairo_pdf"}
+rep_fisher_table %>% 
+  ggplot(aes(x = celltype, y = frac, fill = type)) +
+  geom_col() +
+  scale_fill_manual(values = cols) +
+  guides(fill = guide_legend(reverse = T)) +
+  labs(x = "Cell type", y = "Fraction of prioritized genes",
+       fill = "Replication") +
+  scale_y_continuous(breaks = c(0, .5, 1)) +
+  coord_flip() +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank())
+```
+
+```{r}
+rep_fisher_table %>% 
+  write.table(
+    "~/tmp/source_data_logan/replication.tsv", sep = "\t", row.names = F, quote = F
+  )
+```
+
+
+
+
+
